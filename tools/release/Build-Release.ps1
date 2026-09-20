@@ -88,9 +88,12 @@ try {
     try {
         foreach ($file in (Get-ChildItem -LiteralPath $publishRoot -File -Recurse | Sort-Object FullName)) {
             $relative = [System.IO.Path]::GetRelativePath($publishRoot, $file.FullName).Replace('\', '/')
-            $entry = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $archive, $file.FullName, "$packageName/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
+            $entry = $archive.CreateEntry("$packageName/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
             $entry.LastWriteTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
+            $input = [IO.File]::OpenRead($file.FullName)
+            $output = $entry.Open()
+            try { $input.CopyTo($output) }
+            finally { $output.Dispose(); $input.Dispose() }
         }
     }
     finally { $archive.Dispose() }
@@ -106,3 +109,4 @@ try {
     Write-Host "SHA256: $hash"
 }
 finally { Pop-Location }
+
