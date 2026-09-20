@@ -8,10 +8,6 @@ A Windows desktop cleaner for temporary files, browser caches, and local privacy
 
 PCleaner can clear selected cookies, website identifiers, and other locally stored data. It does not block advertisements or network requests, and it cannot erase activity stored in your online accounts.
 
-![PCleaner dashboard](docs/pcleaner-dashboard.png)
-
-*Example dashboard; available items and results depend on your PC.*
-
 ## What you can clean
 
 | Area | Features |
@@ -68,3 +64,4 @@ For portable packages and asset rebuilding, see [the build guide](docs/BUILDING.
 ## License
 
 PCleaner source code is available under the [MIT License](LICENSE). Bundled fonts and dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
