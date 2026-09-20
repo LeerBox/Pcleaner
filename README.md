@@ -6,6 +6,18 @@ A Windows desktop cleaner for temporary files, browser caches, and local privacy
 
 PCleaner can clear selected cookies, website identifiers, and other locally stored data. It does not block advertisements or network requests, and it cannot erase activity stored in your online accounts.
 
+## See PCleaner in action
+
+The screenshots below show the main workflow and the areas you can review before cleaning. The available rules and totals depend on the Windows account and browsers on the machine.
+
+![PCleaner dashboard](docs/pcleaner-dashboard.png)
+
+| Windows cleanup | Browser profiles |
+| --- | --- |
+| ![Windows cleanup](docs/pcleaner-windows.png) | ![Browser profiles](docs/pcleaner-browsers.png) |
+
+![PCleaner settings](docs/pcleaner-settings.png)
+
 ## What you can clean
 
 | Area | Features |
