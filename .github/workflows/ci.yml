@@ -38,3 +38,4 @@ jobs:
           path: artifacts/test-results/*.trx
           if-no-files-found: warn
           retention-days: 14
+# The WPF icon and embedded fonts are committed under src/PCleaner.App/Assets and Fonts.
