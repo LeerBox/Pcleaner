@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest an improvement to PCleaner.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+      description: For a cleanup rule, describe the data to remove and any data that must be preserved.
+    validations:
+      required: true

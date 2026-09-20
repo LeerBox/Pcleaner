@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>PCleaner.App</RootNamespace>
+    <AssemblyName>PCleaner</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\PCleaner.ico</ApplicationIcon>
+    <AssemblyTitle>PCleaner - Let's get rid of ads</AssemblyTitle>
+    <Description>Windows and browser cleanup with local privacy controls. Let's get rid of ads.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PCleaner.Core\PCleaner.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\PCleaner.ico" />
+    <Resource Include="Fonts\*.ttf" />
+    <Resource Include="Fonts\LICENCE-Ubuntu-UFL.txt" />
+    <Resource Include="Fonts\COPYRIGHT-Ubuntu.txt" />
+  </ItemGroup>
+
+</Project>

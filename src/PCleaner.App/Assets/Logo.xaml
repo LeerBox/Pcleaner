@@ -1,0 +1,83 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        PCleaner brand mark - the single source of truth for the application icon.
+
+        Everything is drawn on a 256 x 256 grid. The app uses Logo.Image (a vector DrawingImage, crisp at any DPI);
+        tools\icon\Build-Icon.ps1 loads this same dictionary and renders the multi-size PCleaner.ico from it, so the
+        title bar, taskbar, Explorer and the sidebar always show the identical mark.
+
+        Concept: a shield (nothing PCleaner does can harm Windows or a browser) whose face carries a four-point
+        sparkle cut straight through it (a clean, shining result). The sparkle is negative space - the tile's
+        gradient shows through - so the mark needs only two shapes and reads at 16 px, where it becomes a white
+        shield with a diamond of light in it. No third colour, no outline, no clip-art check mark.
+    -->
+
+    <!-- Brand gradient (Brush.PrimaryGradient in the theme), deepened through the middle so the white shield sits on colour -->
+    <LinearGradientBrush x:Key="Logo.TileBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#4F9DFF" Offset="0" />
+        <GradientStop Color="#3481F6" Offset="0.45" />
+        <GradientStop Color="#22B6C3" Offset="0.8" />
+        <GradientStop Color="#2DD4BF" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Soft light from the top-left corner: gives the tile a curved, physical surface -->
+    <RadialGradientBrush x:Key="Logo.SheenBrush" Center="0.22,0.16" GradientOrigin="0.22,0.16" RadiusX="0.8" RadiusY="0.8">
+        <GradientStop Color="#4CFFFFFF" Offset="0" />
+        <GradientStop Color="#14FFFFFF" Offset="0.45" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </RadialGradientBrush>
+
+    <!-- Slight weight at the bottom edge so the tile does not float -->
+    <LinearGradientBrush x:Key="Logo.DepthBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#00000000" Offset="0.55" />
+        <GradientStop Color="#1F001A33" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Light catching the top rim (Fluent "specular edge"); fades out a third of the way down -->
+    <LinearGradientBrush x:Key="Logo.RimBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#7AFFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="0.38" />
+    </LinearGradientBrush>
+
+    <!-- The shield is white with a whisper of cool blue at the bottom, so it reads as lit from above -->
+    <LinearGradientBrush x:Key="Logo.ShieldBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFFFFFF" Offset="0" />
+        <GradientStop Color="#FFF4F8FE" Offset="0.55" />
+        <GradientStop Color="#FFE3ECFA" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Shapes -->
+    <RectangleGeometry x:Key="Logo.Tile" Rect="0,0,256,256" RadiusX="56" RadiusY="56" />
+    <RectangleGeometry x:Key="Logo.TileRim" Rect="1.5,1.5,253,253" RadiusX="54.5" RadiusY="54.5" />
+
+    <!-- The mark: shield with both sparkles cut out of it (EvenOdd makes the inner figures holes).
+         Build-Icon.ps1 addresses the children by index - 0 shield, 1 sparkle, 2 small sparkle - to hint small sizes. -->
+    <GeometryGroup x:Key="Logo.Mark" FillRule="EvenOdd">
+        <!-- Shield (64..192 x 44..215): straight top with rounded shoulders, straight flanks, one continuous curve into a softened point -->
+        <PathGeometry Figures="M 74,44 H 182 A 10,10 0 0 1 192,54 V 122 C 192,160 168,190 135,211 Q 128,215 121,211 C 88,190 64,160 64,122 V 54 A 10,10 0 0 1 74,44 Z" />
+        <!-- Four-point sparkle centred (128,120), radius 48; concave sides (each side is a quadratic curve pulled to the centre) -->
+        <PathGeometry Figures="M 128,72 Q 128,120 176,120 Q 128,120 128,168 Q 128,120 80,120 Q 128,120 128,72 Z" />
+        <!-- A second, smaller glint by the shoulder: centred (168,80), radius 13 -->
+        <PathGeometry Figures="M 168,67 Q 168,80 181,80 Q 168,80 168,93 Q 168,80 155,80 Q 168,80 168,67 Z" />
+    </GeometryGroup>
+
+    <!-- Vector image for the app (sidebar, about) -->
+    <DrawingImage x:Key="Logo.Image">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="{StaticResource Logo.TileBrush}" Geometry="{StaticResource Logo.Tile}" />
+                <GeometryDrawing Brush="{StaticResource Logo.SheenBrush}" Geometry="{StaticResource Logo.Tile}" />
+                <GeometryDrawing Brush="{StaticResource Logo.DepthBrush}" Geometry="{StaticResource Logo.Tile}" />
+                <GeometryDrawing Geometry="{StaticResource Logo.TileRim}">
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="{StaticResource Logo.RimBrush}" Thickness="3" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="{StaticResource Logo.ShieldBrush}" Geometry="{StaticResource Logo.Mark}" />
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

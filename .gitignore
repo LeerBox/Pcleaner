@@ -1,0 +1,30 @@
+# Build artifacts
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Release packages and local build tools
+artifacts/
+.tools/
+*.zip
+*.nupkg
+icon-preview.png
+
+# Local settings, credentials, and diagnostics
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.log
+.idea/
+.vscode/
+__pycache__/
+
+# Original screenshot contains personal browsing findings; keep local only.
+docs/pcleaner-privacy.png

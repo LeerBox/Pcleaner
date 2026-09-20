@@ -1,0 +1,39 @@
+name: Bug report
+description: Report unexpected behavior in PCleaner.
+body:
+  - type: markdown
+    attributes:
+      value: Please remove personal paths, account names, browsing history, and other private data from screenshots and logs.
+  - type: input
+    id: version
+    attributes:
+      label: PCleaner version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11, 64-bit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the affected rule or browser and whether PCleaner was running as administrator.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

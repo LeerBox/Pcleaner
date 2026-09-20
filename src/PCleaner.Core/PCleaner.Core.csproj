@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <RootNamespace>PCleaner.Core</RootNamespace>
+    <AssemblyName>PCleaner.Core</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PCleaner.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.9" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.9" />
+    <!-- Row-level cleaning of browser databases. bundle_winsqlite3 uses the SQLite engine that ships with
+         Windows 10/11 (System32\winsqlite3.dll), so no native library has to be distributed. -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.19" />
+    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.11" />
+  </ItemGroup>
+
+</Project>

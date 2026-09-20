@@ -1,0 +1,67 @@
+name: Build release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Determine version
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          [xml]$props = Get-Content Directory.Build.props -Raw
+          $version = [string]$props.Project.PropertyGroup.Version
+          if ($env:REF_TYPE -eq 'tag' -and $env:REF_NAME -ne "v$version") {
+            throw "The tag must match the project version: v$version"
+          }
+          "PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Build
+        run: dotnet build PCleaner.sln -c Release
+      - name: Test with isolated fixtures
+        run: dotnet test tests/PCleaner.Core.Tests/PCleaner.Core.Tests.csproj -c Release --no-build --filter "Category!=RealMachine"
+      - name: Package portable application
+        shell: pwsh
+        run: ./tools/release/Build-Release.ps1 -Version $env:PACKAGE_VERSION
+      - name: Upload release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: PCleaner-${{ env.PACKAGE_VERSION }}-win-x64
+          path: |
+            artifacts/releases/*.zip
+            artifacts/releases/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Create draft release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $releaseFiles = Get-ChildItem artifacts/releases -File | Where-Object { $_.Name -match '\.(zip|sha256)$' } | Select-Object -ExpandProperty FullName
+          gh release create $env:RELEASE_TAG @releaseFiles --verify-tag --draft --title "PCleaner $env:PACKAGE_VERSION" --notes-file tools/release/RELEASE_NOTES.md
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create the draft release.' }
