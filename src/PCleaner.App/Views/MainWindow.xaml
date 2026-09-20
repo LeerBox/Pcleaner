@@ -1,0 +1,1143 @@
+<Window x:Class="PCleaner.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:PCleaner.App.ViewModels"
+        xmlns:core="clr-namespace:PCleaner.Core.Browsers;assembly=PCleaner.Core"
+        xmlns:log="clr-namespace:PCleaner.Core.Logging;assembly=PCleaner.Core"
+        xmlns:privacy="clr-namespace:PCleaner.Core.Privacy;assembly=PCleaner.Core"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
+        Title="PCleaner"
+        Width="1320" Height="860" MinWidth="1120" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Brush.Background}"
+        Icon="pack://application:,,,/Assets/PCleaner.ico"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale" TextOptions.TextHintingMode="Fixed"
+        FontFamily="{StaticResource Font.Text}">
+
+    <Window.Resources>
+
+        <!-- Rule row: a table row with fixed, shared column widths (see Col.* in the theme) -->
+        <DataTemplate x:Key="RuleRowTemplate" DataType="{x:Type vm:RuleItemViewModel}">
+            <Border x:Name="Row" Padding="0,7" Margin="0,1" CornerRadius="{StaticResource Radius.Control}" Background="Transparent" BorderThickness="1" BorderBrush="Transparent" Cursor="Hand"
+                    MouseLeftButtonUp="OnRuleRowClicked">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource Col.Check}" />
+                        <ColumnDefinition Width="{StaticResource Col.Icon}" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{StaticResource Col.Flags}" />
+                        <ColumnDefinition Width="{StaticResource Col.Risk}" />
+                        <ColumnDefinition Width="{StaticResource Col.Size}" />
+                        <ColumnDefinition Width="{StaticResource Col.Status}" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" HorizontalAlignment="Center" AutomationProperties.Name="{Binding SelectionAutomationName}" />
+
+                    <Border Grid.Column="1" Width="30" Height="30" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.TextSecondary}" />
+                    </Border>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="{Binding RowToolTip}">
+                        <TextBlock Text="{Binding ShortName}" FontWeight="Medium" FontSize="13.5" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Style="{StaticResource Text.Muted}" Margin="0,1,0,0" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding StatusText, Mode=OneWay}" />
+                            <Run Text="{Binding ItemCountText, Mode=OneWay}" Foreground="{StaticResource Brush.TextFaint}" />
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Flags column: one fixed slot per flag, so an icon never shifts sideways when another is absent -->
+                    <Grid Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Left">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="24" />
+                            <ColumnDefinition Width="24" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource Badge.Icon}" HorizontalAlignment="Left" ToolTip="Needs administrator rights.">
+                            <Border.Visibility>
+                                <Binding Path="RequiresAdministrator" Converter="{StaticResource BoolToVisibility}" />
+                            </Border.Visibility>
+                            <TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="11" Foreground="{StaticResource Brush.TextMuted}" />
+                        </Border>
+                        <Border Grid.Column="1" Style="{StaticResource Badge.Icon}" HorizontalAlignment="Left" ToolTip="{Binding ActionLabel}">
+                            <Border.Visibility>
+                                <Binding Path="IsSpecialAction" Converter="{StaticResource BoolToVisibility}" />
+                            </Border.Visibility>
+                            <TextBlock Text="&#xE945;" Style="{StaticResource Text.Icon}" FontSize="11" Foreground="{StaticResource Brush.TextMuted}" />
+                        </Border>
+                    </Grid>
+
+                    <!-- Risk column: same width for every row, badge left aligned -->
+                    <Border Grid.Column="4" Style="{StaticResource Badge}" Background="{Binding Risk, Converter={StaticResource RiskToSoftBrush}}" BorderBrush="{Binding Risk, Converter={StaticResource RiskToBorderBrush}}" HorizontalAlignment="Left" Width="{StaticResource Size.RiskBadge}">
+                        <TextBlock Text="{Binding RiskLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Risk, Converter={StaticResource RiskToBrush}}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <TextBlock Grid.Column="5" Text="{Binding SizeText}" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13.5" Margin="0,0,12,0"
+                               FontFamily="{StaticResource Font.Display}" Foreground="{Binding Self, Converter={StaticResource StatusBrush}}" />
+
+                    <Grid Grid.Column="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Self, Converter={StaticResource StatusGlyph}}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{Binding Self, Converter={StaticResource StatusBrush}}"
+                                   Visibility="{Binding IsWorking, Converter={StaticResource InverseBoolToVisibility}}" />
+                        <TextBlock x:Name="Spinner" Text="&#xE916;" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.Accent}" RenderTransformOrigin="0.5,0.5"
+                                   Visibility="{Binding IsWorking, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock.RenderTransform>
+                                <RotateTransform Angle="0" />
+                            </TextBlock.RenderTransform>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{StaticResource Brush.AccentSoft}" />
+                    <Setter TargetName="Row" Property="BorderBrush" Value="{StaticResource Brush.AccentBorder}" />
+                </DataTrigger>
+                <!-- Locations that do not exist on this PC stay listed (so the user sees what PCleaner knows about) but recede. -->
+                <DataTrigger Binding="{Binding IsNotPresent}" Value="True">
+                    <Setter TargetName="Row" Property="Opacity" Value="0.55" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsWorking}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard Name="SpinStoryboard">
+                            <Storyboard RepeatBehavior="Forever">
+                                <DoubleAnimation Storyboard.TargetName="Spinner" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" From="0" To="360" Duration="0:0:1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="SpinStoryboard" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Row" Property="Background" Value="{StaticResource Brush.SurfaceHover}" />
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Group card: header row + column labels + rows, all on the same column grid -->
+        <DataTemplate x:Key="GroupTemplate" DataType="{x:Type vm:RuleGroupViewModel}">
+            <Border Style="{StaticResource Card}" Padding="8,6,8,8" Margin="0,0,0,12">
+                <StackPanel>
+                    <Grid Height="40">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{StaticResource Col.Check}" />
+                            <ColumnDefinition Width="{StaticResource Col.Icon}" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{StaticResource Col.Size}" />
+                            <ColumnDefinition Width="{StaticResource Col.Status}" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" IsThreeState="False" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip="Select or deselect every item in this group" AutomationProperties.Name="{Binding Name, StringFormat='Select all in {0}'}" />
+                        <Border Grid.Column="1" Width="30" Height="30" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.AccentSoft}" BorderBrush="{StaticResource Brush.AccentBorder}" BorderThickness="1" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.Accent}" />
+                        </Border>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14.5" FontFamily="{StaticResource Font.Display}" VerticalAlignment="Center" />
+                            <Border Style="{StaticResource Badge}" Margin="10,0,0,0" Height="20" Padding="7,0">
+                                <TextBlock Text="{Binding CountText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brush.TextMuted}" VerticalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Grid.Column="3" Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="14" FontFamily="{StaticResource Font.Display}" VerticalAlignment="Center" TextAlignment="Right" Margin="0,0,12,0" Foreground="{StaticResource Brush.TextSecondary}" />
+                        <ToggleButton Grid.Column="4" Style="{StaticResource Chevron}" IsChecked="{Binding IsExpanded, Mode=TwoWay}" VerticalAlignment="Center" HorizontalAlignment="Center" ToolTip="Collapse or expand" />
+                    </Grid>
+
+                    <!-- Running-application banner -->
+                    <Border Margin="0,4,0,0" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.WarningSoft}" BorderBrush="{StaticResource Brush.WarningBorder}" BorderThickness="1" Padding="12,8"
+                            Visibility="{Binding HasBlockedItems, Converter={StaticResource BoolToVisibility}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="&#xE7BA;" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.Warning}" Margin="0,0,10,0" />
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource Brush.Warning}">
+                                <Run Text="{Binding BlockingLabel, Mode=OneWay}" FontWeight="SemiBold" />
+                                <Run Text="{Binding DataContext.BlockedBannerText, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}" />
+                            </TextBlock>
+                            <Button Grid.Column="2" Content="Close it for me" Padding="11,5" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"
+                                    Command="{Binding DataContext.CloseBrowserCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                                    ToolTip="Sends a normal close request to the application's windows (like clicking X) and waits. Background processes without a window are only ended when automatic closing is enabled in Settings (administrator mode). If the application asks to save something, it stays open." />
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                        <!-- Column labels -->
+                        <Grid Margin="0,6,0,2" Height="22">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="{StaticResource Col.Check}" />
+                                <ColumnDefinition Width="{StaticResource Col.Icon}" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="{StaticResource Col.Flags}" />
+                                <ColumnDefinition Width="{StaticResource Col.Risk}" />
+                                <ColumnDefinition Width="{StaticResource Col.Size}" />
+                                <ColumnDefinition Width="{StaticResource Col.Status}" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="2" Text="ITEM" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.TextFaint}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="FLAGS" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.TextFaint}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="4" Text="RISK" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.TextFaint}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="SIZE" Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.TextFaint}" VerticalAlignment="Center" TextAlignment="Right" Margin="0,0,12,0" />
+                        </Grid>
+                        <Border Height="1" Background="{StaticResource Brush.Border}" Margin="0,0,0,2" />
+                        <ItemsControl ItemsSource="{Binding ItemsView}" ItemTemplate="{StaticResource RuleRowTemplate}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Category block -->
+        <DataTemplate x:Key="CategoryTemplate" DataType="{x:Type vm:CategoryViewModel}">
+            <StackPanel Margin="0,0,0,22" Visibility="{Binding Groups.Count, Converter={StaticResource CountToVisibility}}">
+                <Grid Margin="4,0,4,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource IconTile}" Margin="0,0,14,0">
+                        <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="18" Foreground="{StaticResource Brush.Accent}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" Style="{StaticResource Text.Section}" FontSize="17" />
+                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0,0,0">
+                        <TextBlock Text="{Binding SizeText}" FontSize="20" FontWeight="SemiBold" Style="{StaticResource Text.Large}" TextAlignment="Right" />
+                        <TextBlock Style="{StaticResource Text.Muted}" TextAlignment="Right">
+                            <Run Text="{Binding SelectedCount, Mode=OneWay}" /><Run Text=" of " /><Run Text="{Binding ItemCount, Mode=OneWay}" /><Run Text=" selected" />
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Groups}" ItemTemplate="{StaticResource GroupTemplate}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BrowserChipTemplate" DataType="{x:Type core:DetectedBrowser}">
+            <Border CornerRadius="{StaticResource Radius.Row}" Padding="12,9" Margin="0,0,10,10" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="30" Height="30" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.AccentSoft}" BorderBrush="{StaticResource Brush.AccentBorder}" BorderThickness="1" Margin="0,0,10,0">
+                        <TextBlock Text="&#xE774;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent2}" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Definition.Name}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding Summary, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BreakdownTemplate" DataType="{x:Type vm:BreakdownEntry}">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,8,0" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" />
+                <TextBlock Grid.Column="2" FontWeight="SemiBold" FontFamily="{StaticResource Font.Display}">
+                    <Run Text="{Binding SizeText, Mode=OneWay}" /><Run Text="  " /><Run Text="{Binding Items, Mode=OneWay, Converter={StaticResource CountLabel}, ConverterParameter=item}" Foreground="{StaticResource Brush.TextFaint}" FontWeight="Normal" />
+                </TextBlock>
+                <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Height="8" Margin="0,7,0,0">
+                    <Border CornerRadius="4" Background="{StaticResource Brush.SurfaceAlt}" />
+                    <Border CornerRadius="4" Background="{StaticResource Brush.PrimaryGradient}" HorizontalAlignment="Left">
+                        <Border.Width>
+                            <MultiBinding Converter="{StaticResource FractionToWidth}">
+                                <Binding Path="Fraction" />
+                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                            </MultiBinding>
+                        </Border.Width>
+                    </Border>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="LogEntryTemplate" DataType="{x:Type log:LogEntry}">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition Width="76" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding TimestampLocal, StringFormat='{}{0:HH:mm:ss.fff}'}" Style="{StaticResource Text.Mono}" Foreground="{StaticResource Brush.TextFaint}" />
+                <Border Grid.Column="1" Style="{StaticResource Badge}" Height="18" Padding="6,0" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent">
+                    <TextBlock Text="{Binding Level}" FontSize="10.5" FontWeight="SemiBold" Foreground="{Binding Level, Converter={StaticResource LogLevelToBrush}}" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Grid.Column="2" Text="{Binding Message}" Style="{StaticResource Text.Mono}" Foreground="{Binding Level, Converter={StaticResource LogLevelToBrush}}" TextWrapping="Wrap" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="PreviewEntryTemplate" DataType="{x:Type vm:PreviewEntry}">
+            <Grid Margin="0,3" ToolTip="{Binding Path}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Mono}" />
+                <TextBlock Grid.Column="1" Text="{Binding Size}" Style="{StaticResource Text.Mono}" Foreground="{StaticResource Brush.TextMuted}" Margin="12,0,0,0" />
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="SettingRow" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="0,15" />
+        </Style>
+
+        <!-- Small tinted icon tile used by the dashboard safety grid and the tracking page -->
+        <Style x:Key="SafetyIcon" TargetType="Border">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Row}" />
+            <Setter Property="Background" Value="{StaticResource Brush.SurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="236" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Background="{StaticResource Brush.SidebarGradient}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Orientation="Horizontal" Margin="22,26,16,26">
+                    <!-- Vector brand mark (Assets/Logo.xaml) - the same drawing the .ico is built from; the glow comes from its alpha -->
+                    <Border Width="40" Height="40" Effect="{StaticResource Shadow.Accent}">
+                        <Image Source="{StaticResource Logo.Image}" Width="40" Height="40" />
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="PCleaner" FontSize="19" FontWeight="SemiBold" Style="{StaticResource Text.Large}" />
+                        <TextBlock Style="{StaticResource Text.Muted}">
+                            <Run Text="v" /><Run Text="{Binding Source={x:Static vm:MainViewModel.AppVersion}, Mode=OneWay}" /><Run Text="  ·  " /><Run Text="{Binding StateLabel, Mode=OneWay}" Foreground="{StaticResource Brush.Accent2}" />
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1">
+                    <TextBlock Text="OVERVIEW" Style="{StaticResource Text.Caption}" Margin="24,0,0,6" Foreground="{StaticResource Brush.TextFaint}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE80F;" Content="Dashboard" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Dashboard, Mode=TwoWay}" />
+                    <TextBlock Text="CLEANUP" Style="{StaticResource Text.Caption}" Margin="24,18,0,6" Foreground="{StaticResource Brush.TextFaint}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE7F8;" Content="Windows" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Windows, Mode=TwoWay}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE71D;" Content="Applications" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Applications, Mode=TwoWay}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE774;" Content="Web browsers" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Browsers, Mode=TwoWay}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE928;" Content="Privacy" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Tracking, Mode=TwoWay}" />
+                    <TextBlock Text="SYSTEM" Style="{StaticResource Text.Caption}" Margin="24,18,0,6" Foreground="{StaticResource Brush.TextFaint}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE713;" Content="Settings" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Settings, Mode=TwoWay}" />
+                    <RadioButton Style="{StaticResource Nav.Item}" Tag="&#xE7C3;" Content="Activity log" IsChecked="{Binding CurrentSection, Converter={StaticResource EqualityToBool}, ConverterParameter=Log, Mode=TwoWay}" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Margin="16,0,16,18">
+                    <Border Style="{StaticResource Card}" Padding="14" Background="{StaticResource Brush.Surface}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Width="32" Height="32" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.AccentSoft}" BorderBrush="{StaticResource Brush.AccentBorder}" BorderThickness="1" Margin="0,0,10,0">
+                                    <TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent2}" />
+                                </Border>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ElevationText}" FontWeight="SemiBold" />
+                                    <TextBlock Style="{StaticResource Text.Muted}" Text="Current privileges" />
+                                </StackPanel>
+                            </StackPanel>
+                            <Button Content="Restart as administrator" Margin="0,12,0,0" Padding="10,7" FontSize="12" HorizontalAlignment="Stretch"
+                                    Command="{Binding RestartElevatedCommand}"
+                                    Visibility="{Binding IsElevated, Converter={StaticResource InverseBoolToVisibility}}"
+                                    ToolTip="System-wide items (Windows\Temp, Windows Update cache, Disk Cleanup handlers...) need administrator rights." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Margin="32,28,32,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding SectionTitle}" Style="{StaticResource Text.Title}" />
+                    <TextBlock Text="{Binding SectionSubtitle}" Style="{StaticResource Text.Subtitle}" Margin="0,4,0,0" MaxWidth="760" HorizontalAlignment="Left" />
+                </StackPanel>
+                <!-- Page toolbar: selection presets in one segmented control, live summary underneath -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="24,2,0,0" Visibility="{Binding IsRulesPage, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Style="{StaticResource Segmented}" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource Button.Segment}" Command="{Binding SelectRecommendedCommand}" AutomationProperties.Name="Recommended" ToolTip="Select every 'Safe' item on this page and deselect everything with side effects.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE73E;" Style="{StaticResource Text.Icon}" FontSize="11" Margin="0,0,7,0" Foreground="{StaticResource Brush.Success}" />
+                                        <TextBlock Text="Recommended" />
+                                    </StackPanel>
+                                </Button>
+                                <Border Style="{StaticResource Segmented.Divider}" />
+                                <Button Style="{StaticResource Button.Segment}" Content="All" Command="{Binding SelectAllVisibleCommand}" ToolTip="Select everything on this page, including privacy and side-effect items." />
+                                <Border Style="{StaticResource Segmented.Divider}" />
+                                <Button Style="{StaticResource Button.Segment}" Content="None" Command="{Binding SelectNoneCommand}" ToolTip="Deselect everything on this page." />
+                                <Border Style="{StaticResource Segmented.Divider}" Visibility="{Binding HasBlockedSelection, Converter={StaticResource BoolToVisibility}}" />
+                                <Button Style="{StaticResource Button.Segment}" Command="{Binding DeselectBlockedCommand}" Visibility="{Binding HasBlockedSelection, Converter={StaticResource BoolToVisibility}}" AutomationProperties.Name="Skip blocked" ToolTip="Deselect items that are blocked by a running application or need administrator rights.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE7BA;" Style="{StaticResource Text.Icon}" FontSize="11" Margin="0,0,7,0" Foreground="{StaticResource Brush.Warning}" />
+                                        <TextBlock Text="Skip blocked" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Border>
+                        <Button Style="{StaticResource Button.Icon}" Height="36" Width="36" Command="{Binding RefreshCommand}" ToolTip="Re-detect browsers and rebuild the rule list." AutomationProperties.Name="Refresh">
+                            <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="14" />
+                        </Button>
+                    </StackPanel>
+                    <TextBlock Text="{Binding SelectionSummary}" Style="{StaticResource Text.Muted}" HorizontalAlignment="Right" Margin="0,8,46,0" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Content host with page transition -->
+            <Grid Grid.Row="1" Margin="32,0,32,0" x:Name="PageHost" RenderTransformOrigin="0.5,0.5">
+                <Grid.RenderTransform>
+                    <TranslateTransform Y="0" />
+                </Grid.RenderTransform>
+
+                <!-- Dashboard -->
+                <ScrollViewer x:Name="DashboardScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsDashboard, Converter={StaticResource BoolToVisibility}}" Padding="0,0,10,0">
+                    <StackPanel Margin="0,4,0,18">
+
+                        <TextBlock Text="Let's get rid of ads" Style="{StaticResource Text.Section}" Margin="0,0,0,6" />
+                        <TextBlock Text="Clean up local tracking data and reclaim space. PCleaner does not block ads." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,0,0,18" />
+
+                        <!-- Hero -->
+                        <Border CornerRadius="{StaticResource Radius.Hero}" Padding="28,26" Background="{StaticResource Brush.HeroGradient}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                            <Grid>
+                                <Border CornerRadius="{StaticResource Radius.Hero}" Background="{StaticResource Brush.Glow}" Margin="-28,-26" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Accent2}" Text="RECLAIMABLE SPACE (SELECTED ITEMS)" Visibility="{Binding IsCleaned, Converter={StaticResource InverseBoolToVisibility}}" />
+                                            <TextBlock Style="{StaticResource Text.Caption}" Foreground="{StaticResource Brush.Success}" Text="CLEANUP COMPLETE" Visibility="{Binding IsCleaned, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
+                                        <Grid Margin="0,6,0,0">
+                                            <TextBlock FontSize="44" FontWeight="SemiBold" Visibility="{Binding IsCleaned, Converter={StaticResource InverseBoolToVisibility}}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Large}">
+                                                        <Setter Property="Text" Value="{Binding TotalSelectedText}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ShowResults}" Value="False">
+                                                                <Setter Property="Text" Value="Not analyzed yet" />
+                                                                <Setter Property="FontSize" Value="30" />
+                                                                <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" Visibility="{Binding IsCleaned, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding LastFreedText}" FontSize="44" FontWeight="SemiBold" Style="{StaticResource Text.Large}" Foreground="{StaticResource Brush.Success}" />
+                                                <TextBlock Text=" freed" FontSize="22" FontWeight="Medium" Style="{StaticResource Text.Large}" Foreground="{StaticResource Brush.TextSecondary}" VerticalAlignment="Bottom" Margin="0,0,0,8" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Text.Secondary}" Text="Click Analyze to measure what can be cleaned safely on this PC." Visibility="{Binding ShowResults, Converter={StaticResource InverseBoolToVisibility}}" TextWrapping="Wrap" />
+                                        <TextBlock Style="{StaticResource Text.Secondary}" Text="{Binding SummaryDetails}" Visibility="{Binding ShowResults, Converter={StaticResource BoolToVisibility}}" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                            <Button Style="{StaticResource Button.Primary}" Command="{Binding PrimaryActionCommand}" MinWidth="160" AutomationProperties.Name="{Binding PrimaryActionText}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding PrimaryActionGlyph}" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="#06121F" Margin="0,0,8,0" />
+                                                    <TextBlock Text="{Binding PrimaryActionText}" Foreground="#06121F" FontWeight="SemiBold" FontSize="14" />
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Content="Cancel" Command="{Binding CancelCommand}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="10,0,0,0" />
+                                            <Button Command="{Binding NavigateCommand}" CommandParameter="{x:Static vm:Section.Windows}" Margin="10,0,0,0" Visibility="{Binding IsBusy, Converter={StaticResource InverseBoolToVisibility}}" AutomationProperties.Name="Review items">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Review items" />
+                                                    <TextBlock Text="&#xE76C;" Style="{StaticResource Text.Icon}" FontSize="10" Margin="8,1,0,0" Foreground="{StaticResource Brush.TextMuted}" />
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Stats column -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="40,0,0,0" MinWidth="250">
+                                        <Border CornerRadius="{StaticResource Radius.Row}" Background="#26000000" BorderBrush="#1AFFFFFF" BorderThickness="1" Padding="16,12" Margin="0,0,0,10">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource Text.Caption}" Text="FREED IN LAST RUN" />
+                                                <TextBlock Text="{Binding LastFreedText}" FontSize="24" FontWeight="SemiBold" Style="{StaticResource Text.Large}" Foreground="{StaticResource Brush.Success}" Margin="0,2,0,0" />
+                                                <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding LastRunText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border CornerRadius="{StaticResource Radius.Row}" Background="#26000000" BorderBrush="#1AFFFFFF" BorderThickness="1" Padding="16,12">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource Text.Caption}" Text="RULES" />
+                                                    <TextBlock FontSize="20" FontWeight="SemiBold" Style="{StaticResource Text.Large}" Margin="0,2,0,0">
+                                                        <Run Text="{Binding SelectedRuleCount, Mode=OneWay}" /><Run Text=" / " Foreground="{StaticResource Brush.TextFaint}" /><Run Text="{Binding TotalRuleCount, Mode=OneWay}" Foreground="{StaticResource Brush.TextFaint}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock Style="{StaticResource Text.Caption}" Text="ALL TIME" />
+                                                    <TextBlock Text="{Binding LifetimeFreedShort}" FontSize="20" FontWeight="SemiBold" Style="{StaticResource Text.Large}" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </Border>
+
+                        <!-- Second row: breakdown + browsers -->
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="7*" />
+                                <ColumnDefinition Width="5*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource Card}" Margin="0,0,14,0">
+                                <StackPanel>
+                                    <Grid>
+                                        <TextBlock Text="Where the space is" Style="{StaticResource Text.Section}" />
+                                        <TextBlock Text="{Binding BreakdownTotalText}" HorizontalAlignment="Right" FontWeight="SemiBold" FontFamily="{StaticResource Font.Display}" Foreground="{StaticResource Brush.TextSecondary}" Visibility="{Binding HasBreakdown, Converter={StaticResource BoolToVisibility}}" />
+                                    </Grid>
+                                    <TextBlock Style="{StaticResource Text.Muted}" Text="{Binding BreakdownSubtitle}" Margin="0,2,0,16" />
+                                    <ItemsControl ItemsSource="{Binding Breakdown}" ItemTemplate="{StaticResource BreakdownTemplate}" Visibility="{Binding HasBreakdown, Converter={StaticResource BoolToVisibility}}" />
+                                    <Border Visibility="{Binding HasBreakdown, Converter={StaticResource InverseBoolToVisibility}}" Padding="0,18" >
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE9D9;" Style="{StaticResource Text.Icon}" FontSize="28" Foreground="{StaticResource Brush.TextFaint}" />
+                                            <TextBlock Text="Nothing measured yet" Style="{StaticResource Text.Muted}" Margin="0,10,0,0" HorizontalAlignment="Center" />
+                                            <TextBlock Text="Run Analyze to see the distribution." Style="{StaticResource Text.Muted}" Foreground="{StaticResource Brush.TextFaint}" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource Card}" Grid.Column="1">
+                                <StackPanel>
+                                    <TextBlock Text="Detected browsers" Style="{StaticResource Text.Section}" />
+                                    <TextBlock Style="{StaticResource Text.Muted}" Text="Profiles come from each browser's own registry (Local State / profiles.ini). Extensions, bookmarks, passwords and settings are never touched." TextWrapping="Wrap" Margin="0,2,0,14" />
+                                    <ItemsControl ItemsSource="{Binding Browsers}" ItemTemplate="{StaticResource BrowserChipTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Text="No supported browser data was found for this Windows account." Style="{StaticResource Text.Muted}" Visibility="{Binding Browsers.Count, Converter={StaticResource ZeroCountToVisibility}}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Third row: safety + risk levels -->
+                        <Grid Margin="0,16,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="7*" />
+                                <ColumnDefinition Width="5*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource Card}" Margin="0,0,14,0">
+                                <StackPanel>
+                                    <TextBlock Text="How PCleaner stays safe" Style="{StaticResource Text.Section}" Margin="0,0,0,12" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,12,14">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE73E;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Allow-list only" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Only known cache locations are ever targeted; unknown files are left alone." /></StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,14">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Second safety layer" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Windows, Program Files, documents, extensions and passwords are blocked independently." /></StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,12,14">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE7F8;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Microsoft's own handlers" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Windows Update, Delivery Optimization and Windows.old use the built-in Disk Cleanup logic." /></StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,14">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE72E;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Nothing is forced" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Files in use are skipped and links are never followed. Programs are closed only when you ask for it - never while they show a window." /></StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,12,0">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE774;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Browsers stay intact" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Cleaned only while closed; extensions, bookmarks and logins are preserved." /></StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE823;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Success}" /></Border>
+                                            <StackPanel Width="190"><TextBlock Text="Recent files are kept" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Temp files younger than 24 hours stay, so running installers keep working." /></StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource Card}" Grid.Column="1">
+                                <StackPanel>
+                                    <TextBlock Text="Risk levels" Style="{StaticResource Text.Section}" Margin="0,0,0,12" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Border Style="{StaticResource Badge}" Background="{StaticResource Brush.SuccessSoft}" BorderBrush="{StaticResource Brush.SuccessBorder}" Width="{StaticResource Size.RiskBadge}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,0,12,12"><TextBlock Text="Safe" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brush.Success}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Grid.Column="1" Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,3,0,12" Text="Pure caches, rebuilt automatically. Selected by default." />
+                                        <Border Grid.Row="1" Style="{StaticResource Badge}" Background="{StaticResource Brush.WarningSoft}" BorderBrush="{StaticResource Brush.WarningBorder}" Width="{StaticResource Size.RiskBadge}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,0,12,12"><TextBlock Text="Side effects" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brush.Warning}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,3,0,12" Text="Harmless for Windows but noticeable: lost tabs, re-downloads, no rollback. Off by default." />
+                                        <Border Grid.Row="2" Style="{StaticResource Badge}" Background="{StaticResource Brush.PrivacySoft}" BorderBrush="{StaticResource Brush.PrivacyBorder}" Width="{StaticResource Size.RiskBadge}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,0,12,0"><TextBlock Text="Privacy" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brush.Privacy}" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,3,0,0" Text="Personal traces such as history, cookies and recent files. Your choice - off by default." />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Rules -->
+                <Grid Visibility="{Binding IsRulesPage, Converter={StaticResource BoolToVisibility}}" x:Name="RulesLayout">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" MinWidth="490" />
+                        <ColumnDefinition Width="1*" MinWidth="300" MaxWidth="380" />
+                    </Grid.ColumnDefinitions>
+                    <ScrollViewer x:Name="RulesScroll" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0">
+                        <StackPanel Margin="0,4,0,18">
+                            <ItemsControl ItemsSource="{Binding VisibleCategories}" ItemTemplate="{StaticResource CategoryTemplate}" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Details pane -->
+                    <Border Grid.Column="1" Style="{StaticResource Card}" Margin="14,4,0,18" Padding="0">
+                        <Grid>
+                            <StackPanel VerticalAlignment="Center" Margin="32" Visibility="{Binding HasSelectedItem, Converter={StaticResource InverseBoolToVisibility}}">
+                                <Border Width="64" Height="64" CornerRadius="{StaticResource Radius.Card}" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" HorizontalAlignment="Center">
+                                    <TextBlock Text="&#xE946;" Style="{StaticResource Text.Icon}" FontSize="26" Foreground="{StaticResource Brush.TextFaint}" />
+                                </Border>
+                                <TextBlock Text="Item details" FontWeight="SemiBold" FontSize="15" HorizontalAlignment="Center" Margin="0,16,0,4" />
+                                <TextBlock Text="Select an item to see what it does, where it looks, why it is safe and exactly which files would be removed." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" TextAlignment="Center" />
+                            </StackPanel>
+                            <Grid DataContext="{Binding SelectedItem}" Visibility="{Binding DataContext.HasSelectedItem, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Margin="20,18,20,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="40" Height="40" CornerRadius="{StaticResource Radius.Row}" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" Margin="0,0,12,0" VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="17" Foreground="{StaticResource Brush.Accent}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" FontFamily="{StaticResource Font.Display}" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                <Border Style="{StaticResource Badge}" Background="{Binding Risk, Converter={StaticResource RiskToSoftBrush}}" BorderBrush="{Binding Risk, Converter={StaticResource RiskToBorderBrush}}" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding RiskLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Risk, Converter={StaticResource RiskToBrush}}" VerticalAlignment="Center" />
+                                                </Border>
+                                                <Border Style="{StaticResource Badge}"><TextBlock Text="{Binding ActionLabel}" FontSize="11" Foreground="{StaticResource Brush.TextMuted}" VerticalAlignment="Center" /></Border>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Margin="0,14,0,0" LineHeight="20" Foreground="{StaticResource Brush.TextSecondary}" />
+                                    <Button Style="{StaticResource Button.Link}" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                            Command="{Binding DataContext.OpenReferenceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Reference}"
+                                            Visibility="{Binding Reference, Converter={StaticResource NullToCollapsed}}" ToolTip="{Binding Reference}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE71B;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent}" Margin="0,0,6,0" />
+                                            <TextBlock Text="Why this is safe (source)" Foreground="{StaticResource Brush.Accent}" FontSize="12" FontWeight="Medium" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Border CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" Padding="12,10" Margin="0,14,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Self, Converter={StaticResource StatusGlyph}}" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{Binding Self, Converter={StaticResource StatusBrush}}" Margin="0,0,10,0" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding StatusText}" FontWeight="Medium" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding CleanSummary}" Style="{StaticResource Text.Muted}" Foreground="{StaticResource Brush.Accent2}" TextWrapping="Wrap" Visibility="{Binding CleanSummary, Converter={StaticResource NullToCollapsed}}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="15" FontFamily="{StaticResource Font.Display}" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{Binding Self, Converter={StaticResource StatusBrush}}" />
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+
+                                <!-- Tab strip shares the 20 px content column above; every tab body indents its rows by the same 8 px as list items -->
+                                <TabControl Grid.Row="1" Margin="20,4,20,14">
+                                    <TabItem Header="{Binding PreviewHeader}">
+                                        <Grid>
+                                            <ItemsControl ItemsSource="{Binding LargestItems}" ItemTemplate="{StaticResource PreviewEntryTemplate}" Margin="8,0" />
+                                            <TextBlock Style="{StaticResource Text.Muted}" Margin="8,4,8,0" Text="{Binding EmptyPreviewText}" VerticalAlignment="Top" TextWrapping="Wrap" Visibility="{Binding LargestItems.Count, Converter={StaticResource ZeroCountToVisibility}}" />
+                                        </Grid>
+                                    </TabItem>
+                                    <TabItem Header="{Binding AllItemsHeader}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <ListBox ItemsSource="{Binding PreviewPaths}">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" Style="{StaticResource Text.Mono}" ToolTip="{Binding}" />
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                            <TextBlock Grid.Row="1" Style="{StaticResource Text.Muted}" Margin="8,6,8,0" Visibility="{Binding PreviewOverflow, Converter={StaticResource CountToVisibility}}">
+                                                <Run Text="… and " /><Run Text="{Binding PreviewOverflow, Mode=OneWay}" /><Run Text=" more" />
+                                            </TextBlock>
+                                            <TextBlock Style="{StaticResource Text.Muted}" Margin="8,4,8,0" Text="{Binding EmptyPreviewText}" VerticalAlignment="Top" TextWrapping="Wrap" Visibility="{Binding PreviewPaths.Count, Converter={StaticResource ZeroCountToVisibility}}" />
+                                        </Grid>
+                                    </TabItem>
+                                    <TabItem Header="Paths">
+                                        <ListBox ItemsSource="{Binding Locations}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}" Style="{StaticResource Text.Mono}" TextWrapping="Wrap" ToolTip="{Binding}" />
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </TabItem>
+                                    <TabItem Header="Skipped">
+                                        <Grid>
+                                            <ListBox ItemsSource="{Binding FailureLines}">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}" Style="{StaticResource Text.Mono}" TextWrapping="Wrap" Foreground="{StaticResource Brush.Warning}" ToolTip="{Binding}" />
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                            <TextBlock Style="{StaticResource Text.Muted}" Margin="8,4,8,0" Text="Files that were in use or protected show up here after cleaning." VerticalAlignment="Top" TextWrapping="Wrap" Visibility="{Binding FailureLines.Count, Converter={StaticResource ZeroCountToVisibility}}" />
+                                        </Grid>
+                                    </TabItem>
+                                </TabControl>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Settings -->
+                <!-- Page roots: the content column is a star column capped at the page's design width, so cards keep that
+                     exact width whenever the window allows it (a left-aligned MaxWidth panel would shrink to its text). -->
+                <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsSettings, Converter={StaticResource BoolToVisibility}}" Padding="0,0,10,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="860" />
+                        </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,4,0,18" DataContext="{Binding Settings}">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Border Style="{StaticResource IconTile}" Width="34" Height="34" Margin="0,0,12,0"><TextBlock Text="&#xE74D;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                    <TextBlock Text="Cleaning" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Border Style="{StaticResource SettingRow}">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ConfirmBeforeCleaning}">
+                                        <StackPanel>
+                                            <TextBlock Text="Ask for confirmation before cleaning" FontWeight="Medium" />
+                                            <TextBlock Text="Shows what will be removed and waits for your OK." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                                <Border Style="{StaticResource SettingRow}">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CloseBrowsersBeforeCleaning}">
+                                        <StackPanel>
+                                            <TextBlock Text="Ask apps to close before cleaning" FontWeight="Medium" />
+                                            <TextBlock Text="Apps that block an item get a normal close request - like clicking X - and up to 20 seconds. Nothing is killed; whatever stays open is skipped." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                                <Border Style="{StaticResource SettingRow}">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutoCloseBlockingApplications}" IsEnabled="{Binding IsElevated}" AutomationProperties.Name="Close blocking apps automatically">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="Close blocking apps automatically" FontWeight="Medium" VerticalAlignment="Center" />
+                                                <Border Style="{StaticResource Badge.Icon}" Margin="8,0,0,0" ToolTip="Administrator mode">
+                                                    <TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="11" Foreground="{StaticResource Brush.TextMuted}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding AutoCloseHint}" Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                                <Border Style="{StaticResource SettingRow}">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ReopenClosedApplications}" AutomationProperties.Name="Reopen closed apps afterwards">
+                                        <StackPanel>
+                                            <TextBlock Text="Reopen closed apps afterwards" FontWeight="Medium" />
+                                            <TextBlock Text="Apps closed for the cleanup are started again with your normal user rights - never as administrator." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                                <Border Style="{StaticResource SettingRow}">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ScheduleLockedFilesForReboot}">
+                                        <StackPanel>
+                                            <TextBlock Text="Remove locked files at the next restart" FontWeight="Medium" />
+                                            <TextBlock Text="Temp files that are in use are handed to Windows and removed during the next boot. Needs administrator rights." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                                <Border Style="{StaticResource SettingRow}" BorderThickness="0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Keep temporary files younger than" FontWeight="Medium" />
+                                            <TextBlock Text="Very recent temp files may still be in use by an installer. Windows keeps 7 days; 24 hours is a good balance. Applies after Refresh." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" ItemsSource="{Binding TempAgeChoices}" SelectedItem="{Binding TempFileMinimumAgeHours}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding StringFormat='{}{0} hours'}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Border Style="{StaticResource IconTile}" Width="34" Height="34" Margin="0,0,12,0"><TextBlock Text="&#xE774;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                    <TextBlock Text="Browsers" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Border Style="{StaticResource SettingRow}" BorderThickness="0">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IncludeSystemAndGuestProfiles}">
+                                        <StackPanel>
+                                            <TextBlock Text="Include internal browser profiles" FontWeight="Medium" />
+                                            <TextBlock Text="Chromium browsers keep small caches in their hidden 'System Profile' and 'Guest Profile' folders. Applies after Refresh." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <Border Style="{StaticResource IconTile}" Width="34" Height="34" Margin="0,0,12,0"><TextBlock Text="&#xEA18;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                    <TextBlock Text="Startup" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Border Style="{StaticResource SettingRow}" BorderThickness="0">
+                                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding RequestElevationOnStartup}">
+                                        <StackPanel>
+                                            <TextBlock Text="Start as administrator" FontWeight="Medium" />
+                                            <TextBlock Text="Shows the Windows UAC prompt on every start so system-wide items are available right away." Style="{StaticResource Text.Muted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Style="{StaticResource IconTile}" Width="34" Height="34" Margin="0,0,12,0"><TextBlock Text="&#xE7C3;" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                    <TextBlock Text="Diagnostics" Style="{StaticResource Text.Section}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,10,0,12">
+                                    <Run Text="Every action is written to a daily log file in " /><Run Text="{Binding DataContext.LogDirectory, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}" FontFamily="{StaticResource Font.Mono}" />
+                                </TextBlock>
+                                <Button Content="Open log folder" HorizontalAlignment="Left" Command="{Binding DataContext.OpenLogFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- Tracking & recommendations -->
+                <ScrollViewer x:Name="PrivacyScroll" VerticalScrollBarVisibility="Auto" Visibility="{Binding IsTracking, Converter={StaticResource BoolToVisibility}}" Padding="0,0,10,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MaxWidth="980" />
+                        </Grid.ColumnDefinitions>
+                    <StackPanel Margin="0,4,0,18">
+                        <Border Style="{StaticResource Card}" Padding="22">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Where a site's memory of you lives" Style="{StaticResource Text.Section}" />
+                                    <TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,6,0,14" Text="{Binding InsightsSummary}" />
+                                    <!-- UniformGrid: three exactly equal columns, so both hero cards share one column grid -->
+                                    <UniformGrid Rows="1" Columns="3">
+                                        <Grid Margin="0,0,14,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE77B;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Warning}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="1 · Your account" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Watch history lives in your YouTube, TikTok or Instagram account. Only the platform's own controls can clear it." /></StackPanel>
+                                        </Grid>
+                                        <Grid Margin="0,0,14,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE928;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="2 · This browser" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Cookies, device identifiers and website storage. PCleaner can clear supported local data; account history and browser fingerprinting can still identify you." /></StackPanel>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE7F8;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent2}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="3 · Windows" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Store apps use the Windows advertising ID. It is a setting - PCleaner shows it and opens the right page." /></StackPanel>
+                                        </Grid>
+                                    </UniformGrid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Top" Width="300">
+                                    <Button Style="{StaticResource Button.Primary}" Command="{Binding SelectTrackingResetCommand}" HorizontalAlignment="Stretch" AutomationProperties.Name="Reset what sites know about me" ToolTip="Selects cookies, website identifiers, website storage, history and saved sessions in every browser, then shows them for review.">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="#06121F" Margin="0,0,8,0" />
+                                            <TextBlock Text="Reset what sites know about me" Foreground="#06121F" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,8,0,0" Text="Selects the reset items in every browser. You will be signed out of websites." />
+                                    <Button Command="{Binding RefreshInsightsCommand}" Margin="0,12,0,0" HorizontalAlignment="Stretch" AutomationProperties.Name="Refresh findings">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="12" Margin="0,0,8,0" />
+                                            <TextBlock Text="Refresh findings" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="22" Margin="0,14,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="What this PC remembers you opened" Style="{StaticResource Text.Section}" />
+                                    <TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,6,0,14" Text="{Binding OpenedFilesSummary}" />
+                                    <UniformGrid Rows="1" Columns="3">
+                                        <Grid Margin="0,0,14,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE8B7;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="Windows" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Recent items, jump lists, Open/Save dialogs, the Run box and Explorer searches." /></StackPanel>
+                                        </Grid>
+                                        <Grid Margin="0,0,14,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE70B;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Warning}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="Editors" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Notepad and Notepad++ reopen their tabs at start. Forgetting closes them and starts them empty - unsaved tabs are lost." /></StackPanel>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Style="{StaticResource SafetyIcon}"><TextBlock Text="&#xE71D;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent2}" /></Border>
+                                            <StackPanel Grid.Column="1"><TextBlock Text="Apps" FontWeight="SemiBold" /><TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Text="Office, Acrobat, VLC, 7-Zip and WinRAR keep their own recent lists. Only installed apps are listed; their settings stay." /></StackPanel>
+                                        </Grid>
+                                    </UniformGrid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Top" Width="300">
+                                    <Button Style="{StaticResource Button.Primary}" Command="{Binding SelectForgetOpenedFilesCommand}" HorizontalAlignment="Stretch" AutomationProperties.Name="Forget opened files" ToolTip="Selects every recent-file list and saved editor session on the Windows and Applications pages, then shows them for review.">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE81C;" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="#06121F" Margin="0,0,8,0" />
+                                            <TextBlock Text="Forget opened files" Foreground="#06121F" FontWeight="SemiBold" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Style="{StaticResource Text.Muted}" TextWrapping="Wrap" Margin="0,8,0,0" Text="Selects the lists and saved tabs of every app. Open editors are asked to close when you clean." />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Findings, one section per scope (browser profile · this PC · Windows). Rows share one column
+                             grid: level icon · text · actions, so titles, badges and buttons line up down the page. -->
+                        <ItemsControl ItemsSource="{Binding InsightGroups}" Margin="0,14,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:InsightGroupViewModel}">
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Padding="0">
+                                        <StackPanel>
+                                            <Grid Margin="16,12,16,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Width="30" Height="30" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.AccentSoft}" BorderBrush="{StaticResource Brush.AccentBorder}" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                    <TextBlock Text="{Binding Glyph}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{StaticResource Brush.Accent}" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Scope}" FontWeight="SemiBold" FontSize="14.5" Style="{StaticResource Text.Large}" />
+                                                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Muted}" Margin="0,1,0,0" />
+                                                </StackPanel>
+                                                <Border Grid.Column="2" Style="{StaticResource Badge}" Margin="12,0,0,0" Height="20" Padding="7,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding CountText}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Brush.TextMuted}" VerticalAlignment="Center" />
+                                                </Border>
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{Binding Items}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type privacy:PrivacyInsight}">
+                                                        <Border BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,0" Padding="16,12,16,13">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="{StaticResource Col.Icon}" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border Width="28" Height="28" CornerRadius="{StaticResource Radius.Control}" Background="{StaticResource Brush.SurfaceAlt}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,1,0,0">
+                                                                    <TextBlock Text="{Binding Level, Converter={StaticResource InsightGlyph}}" Style="{StaticResource Text.Icon}" FontSize="13" Foreground="{Binding Level, Converter={StaticResource InsightBrush}}" />
+                                                                </Border>
+                                                                <StackPanel Grid.Column="1" Margin="4,0,0,0">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="*" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="560" />
+                                                                        <Border Grid.Column="1" Style="{StaticResource Badge}" Margin="10,0,0,0" Height="20" Padding="7,0" HorizontalAlignment="Left" Background="{Binding Level, Converter={StaticResource InsightSoftBrush}}" BorderBrush="{Binding Level, Converter={StaticResource InsightBorderBrush}}">
+                                                                            <TextBlock Text="{Binding Level, Converter={StaticResource InsightLabel}}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Level, Converter={StaticResource InsightBrush}}" VerticalAlignment="Center" />
+                                                                        </Border>
+                                                                    </Grid>
+                                                                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" Margin="0,5,0,0" LineHeight="19" Foreground="{StaticResource Brush.TextSecondary}" ToolTip="{Binding Evidence}" />
+                                                                    <ItemsControl ItemsSource="{Binding Actions}" Margin="0,7,0,0" Visibility="{Binding Actions.Count, Converter={StaticResource CountToVisibility}}">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate DataType="{x:Type privacy:InsightAction}">
+                                                                                <Button Style="{StaticResource Button.Link}" Margin="0,0,18,0" Command="{Binding DataContext.OpenInsightLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" ToolTip="{Binding Url}" AutomationProperties.Name="{Binding Label}">
+                                                                                    <StackPanel Orientation="Horizontal">
+                                                                                        <TextBlock Text="&#xE71B;" Style="{StaticResource Text.Icon}" FontSize="12" Foreground="{StaticResource Brush.Accent}" Margin="0,0,6,0" />
+                                                                                        <TextBlock Text="{Binding Label}" Foreground="{StaticResource Brush.Accent}" FontSize="12" FontWeight="Medium" />
+                                                                                    </StackPanel>
+                                                                                </Button>
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
+                                                                </StackPanel>
+                                                                <Button Grid.Column="2" Margin="16,0,0,0" VerticalAlignment="Top" Padding="12,5" MinWidth="112" Content="Select items" Command="{Binding DataContext.SelectInsightRulesCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Visibility="{Binding RelatedRuleIds.Count, Converter={StaticResource CountToVisibility}}" ToolTip="Selects the cleanup items that remove this data and shows them." />
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Text.Muted}" Margin="4,8,0,0" Text="Nothing found yet." Visibility="{Binding InsightGroups.Count, Converter={StaticResource ZeroCountToVisibility}}" />
+                    </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- Log -->
+                <Border Style="{StaticResource Card}" Margin="0,4,0,18" Padding="14" Visibility="{Binding IsLog, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Width="8" Height="8" CornerRadius="4" Background="{StaticResource Brush.Success}" Margin="4,0,8,0" />
+                                <TextBlock Style="{StaticResource Text.Muted}">
+                                    <Run Text="{Binding LogEntries.Count, Mode=OneWay, Converter={StaticResource CountLabel}, ConverterParameter=entry}" /><Run Text=" this session" />
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Open log folder" Command="{Binding OpenLogFolderCommand}" Margin="0,0,8,0" />
+                                <Button Content="Clear view" Command="{Binding ClearLogCommand}" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Grid.Row="1" CornerRadius="{StaticResource Radius.Row}" Background="#0C1017" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" Padding="8">
+                            <ListBox x:Name="LogList" ItemsSource="{Binding LogEntries}" ItemTemplate="{StaticResource LogEntryTemplate}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Action bar -->
+            <Border Grid.Row="2" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,0" Padding="32,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,24,0">
+                        <Grid Visibility="{Binding ShowResults, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding SummaryHeadline}" FontWeight="SemiBold" FontSize="16" FontFamily="{StaticResource Font.Display}" />
+                            <TextBlock Grid.Column="1" Text="{Binding SummaryDetails}" Style="{StaticResource Text.Muted}" Margin="12,0,0,0" VerticalAlignment="Bottom" TextTrimming="CharacterEllipsis" ToolTip="{Binding SummaryDetails}" />
+                        </Grid>
+                        <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource Brush.TextSecondary}" TextTrimming="CharacterEllipsis" ToolTip="{Binding StatusText}" />
+                        <TextBlock Text="{Binding CurrentPath}" Style="{StaticResource Text.Mono}" FontSize="11" Foreground="{StaticResource Brush.TextFaint}" Visibility="{Binding CurrentPath, Converter={StaticResource NullToCollapsed}}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" />
+                        <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Margin="0,10,0,0" IsIndeterminate="{Binding ProgressIndeterminate}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Cancel" Command="{Binding CancelCommand}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="0,0,10,0" />
+                        <Button Command="{Binding AnalyzeCommand}" Margin="0,0,10,0" Visibility="{Binding CanClean, Converter={StaticResource BoolToVisibility}}" ToolTip="Re-run the analysis." AutomationProperties.Name="Re-analyze">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE72C;" Style="{StaticResource Text.Icon}" FontSize="12" Margin="0,0,8,0" />
+                                <TextBlock Text="Re-analyze" />
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding PrimaryActionCommand}" Style="{StaticResource Button.Primary}" MinWidth="170" AutomationProperties.Name="{Binding PrimaryActionText}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding PrimaryActionGlyph}" Style="{StaticResource Text.Icon}" FontSize="14" Foreground="#06121F" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding PrimaryActionText}" Foreground="#06121F" FontWeight="SemiBold" FontSize="14" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
+

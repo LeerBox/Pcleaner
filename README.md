@@ -1,7 +1,5 @@
 # PCleaner
 
-<img src="docs/pcleaner-icon.png" width="96" align="right" alt="PCleaner icon" />
-
 ### Let's get rid of ads
 
 A Windows desktop cleaner for temporary files, browser caches, and local privacy traces. Review what your PC remembers, choose what to remove, and see the results before cleaning.
